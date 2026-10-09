@@ -6,6 +6,9 @@ class SupabaseConfig {
   static const String supabaseUrl = 'https://qpmwtlwqbugykskvzcra.supabase.co';
   static const String supabaseAnonKey = 'sb_publishable_yF9MWW66DdAX7XmBZ8uNRg_quAGvSNC';
 
+  // Web Client ID từ Google Cloud Console (Tùy chọn, cấu hình trong Supabase Dashboard > Auth > Providers > Google)
+  static const String googleWebClientId = '';
+
   static Future<void> initialize() async {
     await Supabase.initialize(
       url: supabaseUrl,

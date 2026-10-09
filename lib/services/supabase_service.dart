@@ -1,3 +1,4 @@
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/supabase_config.dart';
 import '../models/transaction_model.dart';
@@ -29,7 +30,50 @@ class SupabaseService {
     );
   }
 
+  Future<bool> signInWithGoogle() async {
+    try {
+      final webClientId = SupabaseConfig.googleWebClientId;
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        serverClientId: webClientId.isNotEmpty ? webClientId : null,
+      );
+
+      final googleUser = await googleSignIn.signIn();
+      if (googleUser == null) {
+        // Người dùng hủy đăng nhập
+        return false;
+      }
+
+      final googleAuth = await googleUser.authentication;
+      final accessToken = googleAuth.accessToken;
+      final idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        throw Exception('Không nhận được Google ID Token.');
+      }
+
+      await _client.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: idToken,
+        accessToken: accessToken,
+      );
+
+      return true;
+    } catch (e) {
+      // Fallback sang Browser OAuth nếu Native Google Sign In không cấu hình Web Client ID
+      return await _client.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: 'io.supabase.quanlychitieu://login-callback/',
+      );
+    }
+  }
+
   Future<void> signOut() async {
+    try {
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+      if (await googleSignIn.isSignedIn()) {
+        await googleSignIn.signOut();
+      }
+    } catch (_) {}
     await _client.auth.signOut();
   }
 
