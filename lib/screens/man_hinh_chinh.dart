@@ -1,35 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../models/transaction_model.dart';
-import '../services/supabase_service.dart';
-import 'add_transaction_screen.dart';
+import '../models/giao_dich_model.dart';
+import '../services/dich_vu_supabase.dart';
+import 'man_hinh_them_giao_dich.dart';
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+/// Man hinh chinh Dashboard hien thi so du, thu chi va danh sach giao dich
+class ManHinhChinh extends StatefulWidget {
+  const ManHinhChinh({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<ManHinhChinh> createState() => _TrangThaiManHinhChinh();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  final _supabaseService = SupabaseService();
-  List<TransactionModel> _transactions = [];
-  bool _isLoading = true;
-  String _filterType = 'all'; // 'all', 'income', 'expense'
+class _TrangThaiManHinhChinh extends State<ManHinhChinh> {
+  final _dichVuSupabase = DichVuSupabase();
+
+  List<ModelGiaoDich> _danhSachGiaoDich = [];
+  bool _dangTai = true;
+  String _loaiLoc = 'tat_ca'; // 'tat_ca', 'thu_nhap', 'chi_tieu'
 
   @override
   void initState() {
     super.initState();
-    _loadTransactions();
+    _taiDanhSachGiaoDich();
   }
 
-  Future<void> _loadTransactions() async {
-    setState(() => _isLoading = true);
+  /// Tai danh sach giao dich tu Supabase backend
+  Future<void> _taiDanhSachGiaoDich() async {
+    setState(() => _dangTai = true);
     try {
-      final list = await _supabaseService.getTransactions();
+      final danhSach = await _dichVuSupabase.layDanhSachGiaoDich();
       if (mounted) {
         setState(() {
-          _transactions = list;
+          _danhSachGiaoDich = danhSach;
         });
       }
     } catch (e) {
@@ -40,13 +43,14 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _dangTai = false);
       }
     }
   }
 
-  Future<void> _deleteTransaction(String id) async {
-    final confirmed = await showDialog<bool>(
+  /// Xu ly xoa mot giao dich khi nguoi dung xac nhan
+  Future<void> _xoaGiaoDich(String maDinhDanh) async {
+    final xacNhan = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Xác nhận xóa'),
@@ -65,10 +69,10 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
-    if (confirmed == true) {
+    if (xacNhan == true) {
       try {
-        await _supabaseService.deleteTransaction(id);
-        _loadTransactions();
+        await _dichVuSupabase.xoaGiaoDich(maDinhDanh);
+        _taiDanhSachGiaoDich();
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -79,9 +83,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  IconData _getCategoryIcon(String category, TransactionType type) {
-    if (type == TransactionType.income) {
-      switch (category) {
+  /// Lay bieu tuong Icon phu hop cho tung danh muc va loai giao dich
+  IconData _layBieuTuongDanhMuc(String danhMuc, LoaiGiaoDich loai) {
+    if (loai == LoaiGiaoDich.thuNhap) {
+      switch (danhMuc) {
         case 'Lương':
           return Icons.payments;
         case 'Thưởng':
@@ -94,7 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
           return Icons.account_balance_wallet;
       }
     } else {
-      switch (category) {
+      switch (danhMuc) {
         case 'Ăn uống':
           return Icons.restaurant;
         case 'Mua sắm':
@@ -117,24 +122,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormatter = NumberFormat.currency(locale: 'vi_VN', symbol: 'đ');
+    final dinhDangTien = NumberFormat.currency(locale: 'vi_VN', symbol: 'đ');
 
-    double totalIncome = 0;
-    double totalExpense = 0;
+    double tongThuNhap = 0;
+    double tongChiTieu = 0;
 
-    for (var tx in _transactions) {
-      if (tx.type == TransactionType.income) {
-        totalIncome += tx.amount;
+    for (var gd in _danhSachGiaoDich) {
+      if (gd.loai == LoaiGiaoDich.thuNhap) {
+        tongThuNhap += gd.soTien;
       } else {
-        totalExpense += tx.amount;
+        tongChiTieu += gd.soTien;
       }
     }
 
-    final balance = totalIncome - totalExpense;
+    final soDu = tongThuNhap - tongChiTieu;
 
-    final filteredTransactions = _transactions.where((tx) {
-      if (_filterType == 'income') return tx.type == TransactionType.income;
-      if (_filterType == 'expense') return tx.type == TransactionType.expense;
+    final danhSachDaLoc = _danhSachGiaoDich.where((gd) {
+      if (_loaiLoc == 'thu_nhap') return gd.loai == LoaiGiaoDich.thuNhap;
+      if (_loaiLoc == 'chi_tieu') return gd.loai == LoaiGiaoDich.chiTieu;
       return true;
     }).toList();
 
@@ -150,16 +155,16 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.logout),
             tooltip: 'Đăng xuất',
             onPressed: () async {
-              await _supabaseService.signOut();
+              await _dichVuSupabase.dangXuat();
             },
           ),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _loadTransactions,
+        onRefresh: _taiDanhSachGiaoDich,
         child: Column(
           children: [
-            // Summary Card Header
+            // The tong quan Tai chinh
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -178,7 +183,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    currencyFormatter.format(balance),
+                    dinhDangTien.format(soDu),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 28,
@@ -188,7 +193,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 20),
                   Row(
                     children: [
-                      // Thu nhập
+                      // Thu nhap
                       Expanded(
                         child: Container(
                           padding: const EdgeInsets.all(12),
@@ -211,7 +216,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     const Text('Thu nhập', style: TextStyle(color: Colors.white70, fontSize: 12)),
                                     FittedBox(
                                       child: Text(
-                                        currencyFormatter.format(totalIncome),
+                                        dinhDangTien.format(tongThuNhap),
                                         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                                       ),
                                     ),
@@ -223,7 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      // Chi tiêu
+                      // Chi tieu
                       Expanded(
                         child: Container(
                           padding: const EdgeInsets.all(12),
@@ -246,7 +251,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     const Text('Chi tiêu', style: TextStyle(color: Colors.white70, fontSize: 12)),
                                     FittedBox(
                                       child: Text(
-                                        currencyFormatter.format(totalExpense),
+                                        dinhDangTien.format(tongChiTieu),
                                         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                                       ),
                                     ),
@@ -263,45 +268,45 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // Filter Tabs
+            // Cac Nut loc
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
                   ChoiceChip(
                     label: const Text('Tất cả'),
-                    selected: _filterType == 'all',
-                    onSelected: (selected) {
-                      if (selected) setState(() => _filterType = 'all');
+                    selected: _loaiLoc == 'tat_ca',
+                    onSelected: (duocChon) {
+                      if (duocChon) setState(() => _loaiLoc = 'tat_ca');
                     },
                   ),
                   const SizedBox(width: 8),
                   ChoiceChip(
                     label: const Text('Thu nhập'),
-                    selected: _filterType == 'income',
+                    selected: _loaiLoc == 'thu_nhap',
                     selectedColor: Colors.green[100],
-                    onSelected: (selected) {
-                      if (selected) setState(() => _filterType = 'income');
+                    onSelected: (duocChon) {
+                      if (duocChon) setState(() => _loaiLoc = 'thu_nhap');
                     },
                   ),
                   const SizedBox(width: 8),
                   ChoiceChip(
                     label: const Text('Chi tiêu'),
-                    selected: _filterType == 'expense',
+                    selected: _loaiLoc == 'chi_tieu',
                     selectedColor: Colors.red[100],
-                    onSelected: (selected) {
-                      if (selected) setState(() => _filterType = 'expense');
+                    onSelected: (duocChon) {
+                      if (duocChon) setState(() => _loaiLoc = 'chi_tieu');
                     },
                   ),
                 ],
               ),
             ),
 
-            // Transaction List
+            // Danh sach giao dich
             Expanded(
-              child: _isLoading
+              child: _dangTai
                   ? const Center(child: CircularProgressIndicator())
-                  : filteredTransactions.isEmpty
+                  : danhSachDaLoc.isEmpty
                       ? const Center(
                           child: Text(
                             'Chưa có giao dịch nào.\nNhấn nút (+) để thêm mới!',
@@ -311,12 +316,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         )
                       : ListView.builder(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          itemCount: filteredTransactions.length,
-                          itemBuilder: (context, index) {
-                            final tx = filteredTransactions[index];
-                            final isIncome = tx.type == TransactionType.income;
-                            final amountColor = isIncome ? Colors.green : Colors.red;
-                            final amountPrefix = isIncome ? '+' : '-';
+                          itemCount: danhSachDaLoc.length,
+                          itemBuilder: (context, chiSo) {
+                            final gd = danhSachDaLoc[chiSo];
+                            final laThuNhap = gd.loai == LoaiGiaoDich.thuNhap;
+                            final mauSoTien = laThuNhap ? Colors.green : Colors.red;
+                            final dauSoTien = laThuNhap ? '+' : '-';
 
                             return Card(
                               elevation: 1,
@@ -326,27 +331,27 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               child: ListTile(
                                 leading: CircleAvatar(
-                                  backgroundColor: isIncome ? Colors.green[50] : Colors.red[50],
+                                  backgroundColor: laThuNhap ? Colors.green[50] : Colors.red[50],
                                   child: Icon(
-                                    _getCategoryIcon(tx.category, tx.type),
-                                    color: amountColor,
+                                    _layBieuTuongDanhMuc(gd.danhMuc, gd.loai),
+                                    color: mauSoTien,
                                   ),
                                 ),
                                 title: Text(
-                                  tx.title,
+                                  gd.tieuDe,
                                   style: const TextStyle(fontWeight: FontWeight.bold),
                                 ),
                                 subtitle: Text(
-                                  '${tx.category} • ${DateFormat('dd/MM/yyyy').format(tx.date)}',
+                                  '${gd.danhMuc} • ${DateFormat('dd/MM/yyyy').format(gd.ngay)}',
                                   style: const TextStyle(fontSize: 12),
                                 ),
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      '$amountPrefix${currencyFormatter.format(tx.amount)}',
+                                      '$dauSoTien${dinhDangTien.format(gd.soTien)}',
                                       style: TextStyle(
-                                        color: amountColor,
+                                        color: mauSoTien,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 15,
                                       ),
@@ -354,22 +359,22 @@ class _HomeScreenState extends State<HomeScreen> {
                                     IconButton(
                                       icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 20),
                                       onPressed: () {
-                                        if (tx.id != null) {
-                                          _deleteTransaction(tx.id!);
+                                        if (gd.maDinhDanh != null) {
+                                          _xoaGiaoDich(gd.maDinhDanh!);
                                         }
                                       },
                                     ),
                                   ],
                                 ),
                                 onTap: () async {
-                                  final result = await Navigator.push(
+                                  final ketQua = await Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (context) => AddTransactionScreen(transactionToEdit: tx),
+                                      builder: (context) => ManHinhThemGiaoDich(giaoDichCanSua: gd),
                                     ),
                                   );
-                                  if (result == true) {
-                                    _loadTransactions();
+                                  if (ketQua == true) {
+                                    _taiDanhSachGiaoDich();
                                   }
                                 },
                               ),
@@ -385,14 +390,14 @@ class _HomeScreenState extends State<HomeScreen> {
         foregroundColor: Colors.white,
         child: const Icon(Icons.add),
         onPressed: () async {
-          final result = await Navigator.push(
+          final ketQua = await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => const AddTransactionScreen(),
+              builder: (context) => const ManHinhThemGiaoDich(),
             ),
           );
-          if (result == true) {
-            _loadTransactions();
+          if (ketQua == true) {
+            _taiDanhSachGiaoDich();
           }
         },
       ),

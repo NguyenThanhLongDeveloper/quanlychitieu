@@ -1,31 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../models/transaction_model.dart';
-import '../services/supabase_service.dart';
+import '../models/giao_dich_model.dart';
+import '../services/dich_vu_supabase.dart';
 
-class AddTransactionScreen extends StatefulWidget {
-  final TransactionModel? transactionToEdit;
+/// Man hinh bieu mau de Thêm moi hoac Chinh sua giao dich
+class ManHinhThemGiaoDich extends StatefulWidget {
+  final ModelGiaoDich? giaoDichCanSua;
 
-  const AddTransactionScreen({super.key, this.transactionToEdit});
+  const ManHinhThemGiaoDich({super.key, this.giaoDichCanSua});
 
   @override
-  State<AddTransactionScreen> createState() => _AddTransactionScreenState();
+  State<ManHinhThemGiaoDich> createState() => _TrangThaiManHinhThemGiaoDich();
 }
 
-class _AddTransactionScreenState extends State<AddTransactionScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _amountController = TextEditingController();
-  final _noteController = TextEditingController();
-  final _supabaseService = SupabaseService();
+class _TrangThaiManHinhThemGiaoDich extends State<ManHinhThemGiaoDich> {
+  final _khoaBieuMau = GlobalKey<FormState>();
+  final _boDieuKhienTieuDe = TextEditingController();
+  final _boDieuKhienSoTien = TextEditingController();
+  final _boDieuKhienGhiChu = TextEditingController();
+  final _dichVuSupabase = DichVuSupabase();
 
-  TransactionType _type = TransactionType.expense;
-  String _category = 'Ăn uống';
-  DateTime _selectedDate = DateTime.now();
-  bool _isLoading = false;
+  LoaiGiaoDich _loaiGiaoDich = LoaiGiaoDich.chiTieu;
+  String _danhMuc = 'Ăn uống';
+  DateTime _ngayChon = DateTime.now();
+  bool _dangTai = false;
 
-  final Map<TransactionType, List<String>> _categoriesMap = {
-    TransactionType.expense: [
+  /// Danh sach danh muc phan chia theo loai giao dich
+  final Map<LoaiGiaoDich, List<String>> _banDoDanhMuc = {
+    LoaiGiaoDich.chiTieu: [
       'Ăn uống',
       'Mua sắm',
       'Di chuyển',
@@ -35,7 +37,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       'Giáo dục',
       'Khác',
     ],
-    TransactionType.income: [
+    LoaiGiaoDich.thuNhap: [
       'Lương',
       'Thưởng',
       'Đầu tư',
@@ -48,70 +50,73 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.transactionToEdit != null) {
-      final tx = widget.transactionToEdit!;
-      _titleController.text = tx.title;
-      _amountController.text = tx.amount.toStringAsFixed(0);
-      _noteController.text = tx.note ?? '';
-      _type = tx.type;
-      _category = tx.category;
-      _selectedDate = tx.date;
+    // Neu truyen vaogiaoDichCanSua thi dien thong tin cu de chinh sua
+    if (widget.giaoDichCanSua != null) {
+      final gd = widget.giaoDichCanSua!;
+      _boDieuKhienTieuDe.text = gd.tieuDe;
+      _boDieuKhienSoTien.text = gd.soTien.toStringAsFixed(0);
+      _boDieuKhienGhiChu.text = gd.ghiChu ?? '';
+      _loaiGiaoDich = gd.loai;
+      _danhMuc = gd.danhMuc;
+      _ngayChon = gd.ngay;
     }
   }
 
   @override
   void dispose() {
-    _titleController.dispose();
-    _amountController.dispose();
-    _noteController.dispose();
+    _boDieuKhienTieuDe.dispose();
+    _boDieuKhienSoTien.dispose();
+    _boDieuKhienGhiChu.dispose();
     super.dispose();
   }
 
-  Future<void> _selectDate() async {
-    final pickedDate = await showDatePicker(
+  /// Hiển thị hop thoai chon ngay
+  Future<void> _chonNgay() async {
+    final ngayDuocChon = await showDatePicker(
       context: context,
-      initialDate: _selectedDate,
+      initialDate: _ngayChon,
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
     );
-    if (pickedDate != null) {
+    if (ngayDuocChon != null) {
       setState(() {
-        _selectedDate = pickedDate;
+        _ngayChon = ngayDuocChon;
       });
     }
   }
 
-  Future<void> _saveTransaction() async {
-    if (!_formKey.currentState!.validate()) return;
+  /// Xu ly luu thông tin giao dịch vao co so du lieu
+  Future<void> _luuGiaoDich() async {
+    if (!_khoaBieuMau.currentState!.validate()) return;
 
-    final userId = _supabaseService.currentUser?.id;
-    if (userId == null) {
+    final maNguoiDung = _dichVuSupabase.nguoiDungHienTai?.id;
+    if (maNguoiDung == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Vui lòng đăng nhập lại.')),
       );
       return;
     }
 
-    final amount = double.tryParse(_amountController.text.trim()) ?? 0.0;
+    final soTienThuc = double.tryParse(_boDieuKhienSoTien.text.trim()) ?? 0.0;
 
-    final transaction = TransactionModel(
-      id: widget.transactionToEdit?.id,
-      userId: userId,
-      title: _titleController.text.trim(),
-      amount: amount,
-      type: _type,
-      category: _category,
-      date: _selectedDate,
-      note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
+    final doiTuongGiaoDich = ModelGiaoDich(
+      maDinhDanh: widget.giaoDichCanSua?.maDinhDanh,
+      maNguoiDung: maNguoiDung,
+      tieuDe: _boDieuKhienTieuDe.text.trim(),
+      soTien: soTienThuc,
+      loai: _loaiGiaoDich,
+      danhMuc: _danhMuc,
+      ngay: _ngayChon,
+      ghiChu: _boDieuKhienGhiChu.text.trim().isEmpty ? null : _boDieuKhienGhiChu.text.trim(),
     );
 
-    setState(() => _isLoading = true);
+    setState(() => _dangTai = true);
 
     try {
-      if (widget.transactionToEdit == null) {
-        await _supabaseService.addTransaction(transaction);
+      if (widget.giaoDichCanSua == null) {
+        await _dichVuSupabase.themGiaoDich(doiTuongGiaoDich);
       } else {
-        await _supabaseService.updateTransaction(transaction);
+        await _dichVuSupabase.capNhatGiaoDich(doiTuongGiaoDich);
       }
       if (mounted) {
         Navigator.pop(context, true);
@@ -124,21 +129,21 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _dangTai = false);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final availableCategories = _categoriesMap[_type]!;
-    if (!availableCategories.contains(_category)) {
-      _category = availableCategories.first;
+    final danhSachDanhMucHienTai = _banDoDanhMuc[_loaiGiaoDich]!;
+    if (!danhSachDanhMucHienTai.contains(_danhMuc)) {
+      _danhMuc = danhSachDanhMucHienTai.first;
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.transactionToEdit == null ? 'Thêm giao dịch' : 'Sửa giao dịch'),
+        title: Text(widget.giaoDichCanSua == null ? 'Thêm giao dịch' : 'Sửa giao dịch'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
       ),
@@ -146,37 +151,37 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
           child: Form(
-            key: _formKey,
+            key: _khoaBieuMau,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Segmented control: Chi tiêu vs Thu nhập
-                SegmentedButton<TransactionType>(
+                // Nut chon loai: Chi tieu vs Thu nhap
+                SegmentedButton<LoaiGiaoDich>(
                   segments: const [
                     ButtonSegment(
-                      value: TransactionType.expense,
+                      value: LoaiGiaoDich.chiTieu,
                       label: Text('Chi tiêu'),
                       icon: Icon(Icons.arrow_downward, color: Colors.red),
                     ),
                     ButtonSegment(
-                      value: TransactionType.income,
+                      value: LoaiGiaoDich.thuNhap,
                       label: Text('Thu nhập'),
                       icon: Icon(Icons.arrow_upward, color: Colors.green),
                     ),
                   ],
-                  selected: {_type},
-                  onSelectionChanged: (Set<TransactionType> newSelection) {
+                  selected: {_loaiGiaoDich},
+                  onSelectionChanged: (Set<LoaiGiaoDich> luaChonMoi) {
                     setState(() {
-                      _type = newSelection.first;
-                      _category = _categoriesMap[_type]!.first;
+                      _loaiGiaoDich = luaChonMoi.first;
+                      _danhMuc = _banDoDanhMuc[_loaiGiaoDich]!.first;
                     });
                   },
                 ),
                 const SizedBox(height: 20),
 
-                // Tiêu đề
+                // Tieu de giao dich
                 TextFormField(
-                  controller: _titleController,
+                  controller: _boDieuKhienTieuDe,
                   decoration: InputDecoration(
                     labelText: 'Tiêu đề (VD: Bữa sáng, Lương tháng 5)',
                     prefixIcon: const Icon(Icons.edit_note),
@@ -184,14 +189,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  validator: (value) =>
-                      value == null || value.trim().isEmpty ? 'Vui lòng nhập tiêu đề' : null,
+                  validator: (giaTri) =>
+                      giaTri == null || giaTri.trim().isEmpty ? 'Vui lòng nhập tiêu đề' : null,
                 ),
                 const SizedBox(height: 16),
 
-                // Số tiền
+                // So tien giao dich
                 TextFormField(
-                  controller: _amountController,
+                  controller: _boDieuKhienSoTien,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     labelText: 'Số tiền (VNĐ)',
@@ -200,11 +205,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
+                  validator: (giaTri) {
+                    if (giaTri == null || giaTri.trim().isEmpty) {
                       return 'Vui lòng nhập số tiền';
                     }
-                    if (double.tryParse(value) == null) {
+                    if (double.tryParse(giaTri) == null) {
                       return 'Số tiền không hợp lệ';
                     }
                     return null;
@@ -212,9 +217,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Danh mục
+                // Danh muc giao dich
                 DropdownButtonFormField<String>(
-                  initialValue: _category,
+                  initialValue: _danhMuc,
                   decoration: InputDecoration(
                     labelText: 'Danh mục',
                     prefixIcon: const Icon(Icons.category),
@@ -222,21 +227,21 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  items: availableCategories.map((cat) {
+                  items: danhSachDanhMucHienTai.map((danhMucItem) {
                     return DropdownMenuItem(
-                      value: cat,
-                      child: Text(cat),
+                      value: danhMucItem,
+                      child: Text(danhMucItem),
                     );
                   }).toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() => _category = val);
+                  onChanged: (giaTriMoi) {
+                    if (giaTriMoi != null) {
+                      setState(() => _danhMuc = giaTriMoi);
                     }
                   },
                 ),
                 const SizedBox(height: 16),
 
-                // Ngày giao dịch
+                // Ngay giao dich
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   shape: RoundedRectangleBorder(
@@ -245,15 +250,15 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   ),
                   leading: const Icon(Icons.calendar_today, color: Colors.teal),
                   title: const Text('Ngày giao dịch'),
-                  subtitle: Text(DateFormat('dd/MM/yyyy').format(_selectedDate)),
+                  subtitle: Text(DateFormat('dd/MM/yyyy').format(_ngayChon)),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: _selectDate,
+                  onTap: _chonNgay,
                 ),
                 const SizedBox(height: 16),
 
-                // Ghi chú
+                // Ghi chu them
                 TextFormField(
-                  controller: _noteController,
+                  controller: _boDieuKhienGhiChu,
                   maxLines: 3,
                   decoration: InputDecoration(
                     labelText: 'Ghi chú (Tùy chọn)',
@@ -266,9 +271,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // Nút Lưu
+                // Nut Luu giao dich
                 ElevatedButton(
-                  onPressed: _isLoading ? null : _saveTransaction,
+                  onPressed: _dangTai ? null : _luuGiaoDich,
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     backgroundColor: Colors.teal,
@@ -277,7 +282,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: _isLoading
+                  child: _dangTai
                       ? const SizedBox(
                           height: 20,
                           width: 20,

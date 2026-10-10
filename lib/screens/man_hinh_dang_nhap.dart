@@ -1,45 +1,48 @@
 import 'package:flutter/material.dart';
-import '../services/supabase_service.dart';
+import '../services/dich_vu_supabase.dart';
 
-class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key});
+/// Man hinh xu ly Dang nhap va Dang ky tai khoan nguoi dung
+class ManHinhDangNhap extends StatefulWidget {
+  const ManHinhDangNhap({super.key});
 
   @override
-  State<AuthScreen> createState() => _AuthScreenState();
+  State<ManHinhDangNhap> createState() => _TrangThaiManHinhDangNhap();
 }
 
-class _AuthScreenState extends State<AuthScreen> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _supabaseService = SupabaseService();
-  bool _isLogin = true;
-  bool _isLoading = false;
+class _TrangThaiManHinhDangNhap extends State<ManHinhDangNhap> {
+  final _boDieuKhienEmail = TextEditingController();
+  final _boDieuKhienMatKhau = TextEditingController();
+  final _dichVuSupabase = DichVuSupabase();
+
+  bool _laDangNhap = true;
+  bool _dangTai = false;
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    _boDieuKhienEmail.dispose();
+    _boDieuKhienMatKhau.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
+  /// Xu ly gui bieu mau Dang nhap / Dang ky bang Email va Mat khau
+  Future<void> _xuLyGui() async {
+    final chuoiEmail = _boDieuKhienEmail.text.trim();
+    final chuoiMatKhau = _boDieuKhienMatKhau.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
+    if (chuoiEmail.isEmpty || chuoiMatKhau.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Vui lòng nhập đầy đủ email và mật khẩu')),
       );
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() => _dangTai = true);
 
     try {
-      if (_isLogin) {
-        await _supabaseService.signIn(email: email, password: password);
+      if (_laDangNhap) {
+        await _dichVuSupabase.dangNhap(email: chuoiEmail, matKhau: chuoiMatKhau);
       } else {
-        await _supabaseService.signUp(email: email, password: password);
+        await _dichVuSupabase.dangKy(email: chuoiEmail, matKhau: chuoiMatKhau);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -56,15 +59,16 @@ class _AuthScreenState extends State<AuthScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _dangTai = false);
       }
     }
   }
 
-  Future<void> _signInWithGoogle() async {
-    setState(() => _isLoading = true);
+  /// Xu ly dang nhap nhanh bang tai khoan Google
+  Future<void> _dangNhapGoogle() async {
+    setState(() => _dangTai = true);
     try {
-      await _supabaseService.signInWithGoogle();
+      await _dichVuSupabase.dangNhapBangGoogle();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -73,7 +77,7 @@ class _AuthScreenState extends State<AuthScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _dangTai = false);
       }
     }
   }
@@ -96,7 +100,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  _isLogin ? 'Đăng Nhập' : 'Tạo Tài Khoản',
+                  _laDangNhap ? 'Đăng Nhập' : 'Tạo Tài Khoản',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: Colors.teal,
@@ -105,7 +109,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _isLogin
+                  _laDangNhap
                       ? 'Chào mừng bạn quay lại ứng dụng Quản lý chi tiêu'
                       : 'Bắt đầu quản lý tài chính cá nhân hiệu quả',
                   style: const TextStyle(color: Colors.grey),
@@ -113,7 +117,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 32),
                 TextField(
-                  controller: _emailController,
+                  controller: _boDieuKhienEmail,
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
                     labelText: 'Email',
@@ -125,7 +129,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 16),
                 TextField(
-                  controller: _passwordController,
+                  controller: _boDieuKhienMatKhau,
                   obscureText: true,
                   decoration: InputDecoration(
                     labelText: 'Mật khẩu',
@@ -137,7 +141,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(
-                  onPressed: _isLoading ? null : _submit,
+                  onPressed: _dangTai ? null : _xuLyGui,
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     backgroundColor: Colors.teal,
@@ -146,7 +150,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: _isLoading
+                  child: _dangTai
                       ? const SizedBox(
                           height: 20,
                           width: 20,
@@ -156,7 +160,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           ),
                         )
                       : Text(
-                          _isLogin ? 'Đăng nhập' : 'Đăng ký',
+                          _laDangNhap ? 'Đăng nhập' : 'Đăng ký',
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                 ),
@@ -164,11 +168,11 @@ class _AuthScreenState extends State<AuthScreen> {
                 TextButton(
                   onPressed: () {
                     setState(() {
-                      _isLogin = !_isLogin;
+                      _laDangNhap = !_laDangNhap;
                     });
                   },
                   child: Text(
-                    _isLogin
+                    _laDangNhap
                         ? 'Chưa có tài khoản? Đăng ký ngay'
                         : 'Đã có tài khoản? Đăng nhập',
                   ),
@@ -189,7 +193,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 16),
                 OutlinedButton.icon(
-                  onPressed: _isLoading ? null : _signInWithGoogle,
+                  onPressed: _dangTai ? null : _dangNhapGoogle,
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(

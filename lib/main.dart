@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'core/supabase_config.dart';
-import 'screens/auth_screen.dart';
-import 'screens/home_screen.dart';
+import 'core/cau_hinh_supabase.dart';
+import 'screens/man_hinh_chinh.dart';
+import 'screens/man_hinh_dang_nhap.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SupabaseConfig.initialize();
-  runApp(const MyApp());
+  await CauHinhSupabase.khoiTao();
+  runApp(const UngDungQuanLyChiTieu());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+/// Lop ung dung chinh Quan Ly Chi Tieu
+class UngDungQuanLyChiTieu extends StatelessWidget {
+  const UngDungQuanLyChiTieu({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -25,11 +26,12 @@ class MyApp extends StatelessWidget {
       home: StreamBuilder<AuthState>(
         stream: Supabase.instance.client.auth.onAuthStateChange,
         builder: (context, snapshot) {
-          final session = snapshot.data?.session ?? Supabase.instance.client.auth.currentSession;
-          if (session != null) {
-            return const HomeScreen();
+          final phienLamViec =
+              snapshot.data?.session ?? Supabase.instance.client.auth.currentSession;
+          if (phienLamViec != null) {
+            return const ManHinhChinh();
           } else {
-            return const AuthScreen();
+            return const ManHinhDangNhap();
           }
         },
       ),
